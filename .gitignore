@@ -107,3 +107,6 @@ InitTestScene*.unity*
 tests-net/bin/
 tests-net/obj/
 
+# CI test results (dotnet test --results-directory ../artifacts)
+/artifacts/
+
