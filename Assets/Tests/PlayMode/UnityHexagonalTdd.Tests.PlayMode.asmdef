@@ -1,0 +1,24 @@
+{
+    "name": "UnityHexagonalTdd.Tests.PlayMode",
+    "rootNamespace": "UnityHexagonalTdd.Tests.PlayMode",
+    "references": [
+        "UnityHexagonalTdd.Domain",
+        "UnityHexagonalTdd.Application",
+        "UnityHexagonalTdd.Presentation",
+        "UnityHexagonalTdd.Bootstrap",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
