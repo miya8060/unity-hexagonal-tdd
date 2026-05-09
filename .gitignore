@@ -39,6 +39,7 @@
 ExportedObj/
 .consulo/
 *.csproj
+!tests-net/*.csproj
 *.unityproj
 *.sln
 *.slnx
@@ -101,3 +102,8 @@ InitTestScene*.unity*
 # IDE
 .idea/
 .vscode/
+
+# .NET sister test project build artifacts
+tests-net/bin/
+tests-net/obj/
+
