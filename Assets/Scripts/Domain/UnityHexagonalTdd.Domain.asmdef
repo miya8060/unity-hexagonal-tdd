@@ -1,0 +1,14 @@
+{
+    "name": "UnityHexagonalTdd.Domain",
+    "rootNamespace": "UnityHexagonalTdd.Domain",
+    "references": [],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": true
+}
