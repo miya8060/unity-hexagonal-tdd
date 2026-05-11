@@ -8,6 +8,7 @@ Unity 個人プロジェクトを **TDD で回しつつ CI を green にし続�
   - Domain / Application は `noEngineReferences: true` の **engine-free POCO** (Unity を起動せず `dotnet test` で走る)
   - Presentation / Bootstrap は Unity Engine に依存し、port を実装する adapter と composition root を担当
 - **port + adapter のサンプル** (`IClock` interface + `UnityClock` adapter + `FakeClock` test double) が 1 組だけ入っており、新規ドメインを書く際の参照実装として使える
+- **dogfood seed**: `Greeter` (Domain) + `GreeterSpec` (EditMode) + `UnityClockSpec` (PlayMode) が「fork 直後 green」を保証する seed として入っている (`Use this template` 直後に CI + Test Runner で green を確認可能)
 - **EditMode + PlayMode 二系統テスト** の asmdef が用意済み
 - **tests-net/ 姉弟 .csproj**: `Assets/Scripts/Domain/**` + `Assets/Scripts/Application/**` + `Assets/Tests/EditMode/**` を `<Compile Include><Link>` でミラーし、Unity を起動せず `dotnet test` で Domain/Application の TDD を回せる
 - **GitHub Actions ワークフロー** (`.github/workflows/test.yml`): push / PR で `dotnet test` が走り、結果を artifact に上げる
@@ -29,9 +30,10 @@ Unity のバージョンを変える場合は、`ProjectSettings/ProjectVersion.
 
 1. GitHub の `Use this template` ボタンから新しい repo を作る (or `gh repo create --template miya8060/unity-hexagonal-tdd ...`)
 2. Unity Hub で clone した repo を Add し、Unity 6.0.74f1 で開く (初回起動でドメインリロードが走る)
-3. **プロジェクト名を書き換える** (詳細は [`docs/template-usage.md`](docs/template-usage.md#最初に何を書き換えるか))
-4. `tests-net/` で `dotnet test` を実行して green になることを確認
-5. Domain にエンティティを 1 つ書き、EditMode に対応する spec を書く (red → green → refactor)
+3. **fork 直後の green 確認**: `tests-net/` で `dotnet test` + Unity Test Runner で EditMode + PlayMode を一度通す (詳細は [`docs/template-usage.md`](docs/template-usage.md#fork-直後の-green-確認-step-0))。fork 後の置換ミスと雛形側の問題を切り分けるための事前 stamp
+4. **プロジェクト名を書き換える** (詳細は [`docs/template-usage.md`](docs/template-usage.md#最初に何を書き換えるか))
+5. **rename 後の green 再確認**: `dotnet test` と Test Runner で green、push して GitHub Actions が green を継承することを確認 ([`docs/template-usage.md`](docs/template-usage.md#step-j-rename-後の最終確認と-ci-green-の継承))
+6. Domain にエンティティを 1 つ書き、EditMode に対応する spec を書く (red → green → refactor)
 
 エンジンを開かずローカルで TDD を回したい場合:
 
@@ -48,6 +50,7 @@ dotnet test
 ├── Assets/
 │   ├── Scripts/
 │   │   ├── Domain/                  # POCO のみ (no Engine ref)
+│   │   │   └── Greeter.cs           # dogfood seed (engine-free TDD 経路)
 │   │   ├── Application/             # ports (interface) + ユースケース (no Engine ref)
 │   │   │   └── IClock.cs            # サンプル port
 │   │   ├── Presentation/            # MonoBehaviour + adapter (Unity Engine 触る側)
@@ -55,9 +58,11 @@ dotnet test
 │   │   └── Bootstrap/               # composition root
 │   └── Tests/
 │       ├── EditMode/                # Domain + Application の純ロジックテスト
+│       │   ├── GreeterSpec.cs       # dogfood seed (engine-free spec)
 │       │   └── SmokeSpec.cs         # CI green seed
 │       └── PlayMode/                # MonoBehaviour + GameObject 統合テスト
-│           └── Fakes/FakeClock.cs   # サンプル test double
+│           ├── Fakes/FakeClock.cs   # サンプル test double
+│           └── UnityClockSpec.cs    # dogfood seed (PlayMode [UnityTest])
 ├── tests-net/
 │   └── UnityHexagonalTdd.Tests.csproj   # 姉弟 .csproj (Domain + Application + EditMode をミラー)
 ├── Packages/
