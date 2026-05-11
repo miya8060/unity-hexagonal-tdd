@@ -163,7 +163,7 @@ MCP 経由で Editor を操作する予定がなければ、`Packages/manifest.j
 2. 最初のドメインを書く際の「ファイル配置 + namespace + asmdef references + spec の書き方」の参照実装になる
 3. 不要になっても、最初のドメインが green になってから削除すれば良い (削除コストは後ろ倒し可能)
 
-**消す場合**: `Greeter.cs` / `GreeterSpec.cs` / `UnityClockSpec.cs` を削除 (`.meta` ファイルも忘れずに)。削除後 CI で「テストが 0 件」になることに注意。なるべく最初のドメインの spec を 1 つ書き終えてから削除するのが安全。
+**消す場合**: `Greeter.cs` / `GreeterSpec.cs` / `UnityClockSpec.cs` を削除 (`.meta` ファイルも忘れずに)。削除後 CI で「テストが 0 件」になることに注意。**自分のドメインを 1〜2 個書き、参照実装として不要になってから削除する**のが安全。spec の書き方・asmdef references・PlayMode の `[UnityTest]` 構造で迷ったときに seed を参照できなくなるコストの方が、seed を残しておく違和感より大きいことが多い。
 
 ### Step I: README を自プロジェクト向けに書き換える
 
@@ -257,6 +257,17 @@ Editor を開いた状態のまま Claude Code 等から PlayMode テストを�
 - `mcp__UnityMCP__refresh_unity` で .meta 強制再生成 (新規 .cs を作ったあと)
 
 詳細は MCP for Unity 側のドキュメント参照。
+
+### dotnet test と Unity Test Runner の cross-validation
+
+姉弟 .csproj は `<Compile Include>` で Unity 側の source を取り込んでいるので、両者の結果は原理的に一致する。ただし `<Compile Include>` の glob 漏れ・asmdef の `defineConstraints` ミスマッチ・`UNITY_EDITOR` 等の define 差で「dotnet test は green だが Unity Test Runner では fail」という乖離が起きうる。
+
+**最初の自分の spec を 1 つ書いたら、両方の runner で同じ結果になることを必ず 1 回確認する**:
+
+- [ ] `cd tests-net && dotnet test` で新 spec が green (または期待通り red)
+- [ ] Unity Editor の Test Runner で同じ spec が同じ結果
+
+一致しない場合は Step D の `<Compile Include>` のパスか asmdef references / namespace の置換漏れが残っている可能性が高い。最初の 1 spec で気付ければ後の TDD loop で混乱しない。
 
 ### red → green → refactor の粒度
 
