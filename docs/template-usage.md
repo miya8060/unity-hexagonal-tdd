@@ -40,6 +40,40 @@ trade-off は **PlayMode テストが CI で走らない** こと。PlayMode は
 
 `Packages/manifest.json` に `com.coplaydev.unity-mcp` が入っている。Claude Code や他の MCP クライアントから `run_tests` / `refresh_unity` を呼んで Editor 越しに PlayMode テストを実行できる。**不要なら削除して構わない** (削除手順は後述)。
 
+## fork 直後の green 確認 (Step 0)
+
+書き換え始める前に、**雛形が手元で green に動くこと** を確認する。これで「以降の red は自分の置換漏れ」と切り分けられる。
+
+### Step 0.1: tests-net で `dotnet test` を通す
+
+```sh
+cd tests-net
+dotnet restore
+dotnet test
+```
+
+Domain (`Greeter`) + Application (`IClock`) + EditMode (`GreeterSpec`, `SmokeSpec`) が pass すれば OK。failure が出る場合は .NET SDK 8.0.x が入っているか (`dotnet --list-sdks` で確認)、`<TargetFramework>net8.0</TargetFramework>` と整合しているかを最初に疑う。
+
+### Step 0.2: Unity Editor を開いて Test Runner で EditMode + PlayMode を通す
+
+1. Unity Hub から repo を Add し、**Unity 6000.0.74f1** で開く (初回起動でドメインリロードが数十秒走る)
+2. `Window → General → Test Runner` を開く
+3. **EditMode** タブ: `GreeterSpec` と `SmokeSpec` が pass することを確認
+4. **PlayMode** タブ: `UnityClockSpec.Now_advances_with_Time_time` が pass することを確認 (`Time.time` が 0.1 秒進むのを待って assert する `[UnityTest]`)
+
+これで「fork 直後の green 状態」が手元で再現できた証拠が取れる。`Use this template` 経由で fork した場合、source 側の最新 green commit を継承しているはずなので、ここで red になることは原則ない。red の場合は雛形側 (`miya8060/unity-hexagonal-tdd`) の最新コミットの CI status と比較する。
+
+### Step 0.3 (任意): MCP for Unity をセッション開始
+
+Claude Code や他の MCP クライアントから Editor 越しにテストを呼びたい場合:
+
+1. Unity Editor で `Window → MCP for Unity` を開く
+2. **Start Session** ボタンを押す (これを押さないと session が張られず MCP 側から見えない)
+3. クライアント側 (Claude Code 等) で `mcpforunity://instances` リソースを読み、`<RepoName>@<hash>` が見えることを確認
+4. 複数 Unity インスタンスを開いている場合は `set_active_instance` で対象を pin する
+
+MCP を使わない場合はこの Step 0.3 をスキップして次の Step A へ進む。
+
 ## 最初に何を書き換えるか
 
 `Use this template` 直後にやる作業。順番通りにやれば 10〜20 分で自分のプロジェクトに化ける。
@@ -69,16 +103,19 @@ Assets/Tests/PlayMode/UnityHexagonalTdd.Tests.PlayMode.asmdef
 
 ### Step C: 既存 .cs の namespace を書き換える
 
-雛形には 4 ファイルだけ .cs が入っている:
+雛形には 7 ファイルの .cs が入っている (production code 3 + test code 4):
 
 | ファイル | 旧 namespace | 新 namespace |
 |---|---|---|
+| `Assets/Scripts/Domain/Greeter.cs` | `UnityHexagonalTdd.Domain` | `MyGame.Domain` |
 | `Assets/Scripts/Application/IClock.cs` | `UnityHexagonalTdd.Application` | `MyGame.Application` |
 | `Assets/Scripts/Presentation/Adapters/UnityClock.cs` | `UnityHexagonalTdd.Presentation.Adapters` | `MyGame.Presentation.Adapters` |
+| `Assets/Tests/EditMode/GreeterSpec.cs` | `UnityHexagonalTdd.Tests.EditMode` | `MyGame.Tests.EditMode` |
 | `Assets/Tests/EditMode/SmokeSpec.cs` | `UnityHexagonalTdd.Tests.EditMode` | `MyGame.Tests.EditMode` |
 | `Assets/Tests/PlayMode/Fakes/FakeClock.cs` | `UnityHexagonalTdd.Tests.PlayMode.Fakes` | `MyGame.Tests.PlayMode.Fakes` |
+| `Assets/Tests/PlayMode/UnityClockSpec.cs` | `UnityHexagonalTdd.Tests.PlayMode` | `MyGame.Tests.PlayMode` |
 
-`UnityClock.cs` と `FakeClock.cs` は `using UnityHexagonalTdd.Application;` も書き換えること。
+各ファイル内の `using UnityHexagonalTdd.<Layer>;` (= 他層を参照する using) もすべて新 namespace に書き換える。一括置換ツール (Rider / VS Code の Find & Replace in Files) で `UnityHexagonalTdd` → `MyGame` を Project ルートに掛けると漏れにくい。
 
 ### Step D: 姉弟 .csproj を書き換える
 
@@ -112,6 +149,42 @@ MCP 経由で Editor を操作する予定がなければ、`Packages/manifest.j
 ### Step G (任意): LICENSE を追加する
 
 雛形には LICENSE が入っていない。public repo にする場合は MIT 等を `LICENSE` ファイルとして追加すること。
+
+### Step H: dogfood seed (Greeter / UnityClockSpec) の扱い
+
+雛形には CI green の seed として 2 つの「dogfood」要素が入っている:
+
+- `Greeter` (Domain) + `GreeterSpec` (EditMode): engine-free TDD 経路の green seed
+- `UnityClockSpec` (PlayMode): `[UnityTest]` で Unity の `Time.time` が進むことを assert する PlayMode green seed
+
+**推奨: 残す**。理由:
+
+1. これらが green であることが「雛形が fork 後も壊れていない」証拠になる (CI と Test Runner の両方で確認可能)
+2. 最初のドメインを書く際の「ファイル配置 + namespace + asmdef references + spec の書き方」の参照実装になる
+3. 不要になっても、最初のドメインが green になってから削除すれば良い (削除コストは後ろ倒し可能)
+
+**消す場合**: `Greeter.cs` / `GreeterSpec.cs` / `UnityClockSpec.cs` を削除 (`.meta` ファイルも忘れずに)。削除後 CI で「テストが 0 件」になることに注意。なるべく最初のドメインの spec を 1 つ書き終えてから削除するのが安全。
+
+### Step I: README を自プロジェクト向けに書き換える
+
+雛形の `README.md` には「unity-hexagonal-tdd 雛形を fork した状態」の説明が書かれている。fork したプロジェクトでは:
+
+- タイトル `# unity-hexagonal-tdd` を `# <YourProject>` に変更
+- 1 段落目の説明を自プロジェクトの目的に書き換え
+- `## 関連プロジェクト` 節は不要になることが多いので削除 (または「この雛形は `miya8060/unity-hexagonal-tdd` から fork した」と明記)
+- `## ライセンス` 節を Step G で追加した LICENSE に合わせて埋める
+
+### Step J: rename 後の最終確認と CI green の継承
+
+ここまでの置換が完了したら、もう一度 green を確認して push する。
+
+1. `cd tests-net && dotnet test` がローカル green になることを確認 (= namespace 置換漏れが残っていない証拠)
+   - red が出る場合: 多くは asmdef の `references` 配列か .cs の `using` / `namespace` 宣言に置換漏れがある。`grep -r UnityHexagonalTdd .` で検出できる
+2. Unity Editor で Test Runner を開いて EditMode + PlayMode が green であることを確認 (PlayMode は CI で走らないのでここで必ず通す)
+3. push して GitHub Actions が green になるのを待つ
+4. **`Use this template` 経由で green を継承した状態 = この時点でフォーク先が自分のドメインを書き始める準備完了** という stamp が成立
+
+CI が red になった場合は、まずローカル `dotnet test` で再現する (Unity Editor 起動なしに debug できるのが姉弟 .csproj 設計の利点)。
 
 ## TDD ループの回し方
 
