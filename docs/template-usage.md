@@ -99,7 +99,7 @@ Assets/Tests/PlayMode/UnityHexagonalTdd.Tests.PlayMode.asmdef
 - `"rootNamespace": "UnityHexagonalTdd.<Layer>"` → `"rootNamespace": "MyGame.<Layer>"`
 - `"references"` 配列内の `"UnityHexagonalTdd.<Layer>"` を `"MyGame.<Layer>"` に置換
 
-**ファイル名自体もリネーム** する: `UnityHexagonalTdd.Domain.asmdef` → `MyGame.Domain.asmdef` (`.asmdef.meta` も追従させる)。
+**ファイル名自体もリネーム** する: `UnityHexagonalTdd.Domain.asmdef` → `MyGame.Domain.asmdef` (`.asmdef.meta` も追従させる)。履歴を残すため `git mv` を使うのが推奨 (`mv` でも git の rename detection で追従するが、意図と history が明示される)。
 
 ### Step C: 既存 .cs の namespace を書き換える
 
@@ -121,7 +121,7 @@ Assets/Tests/PlayMode/UnityHexagonalTdd.Tests.PlayMode.asmdef
 
 `tests-net/UnityHexagonalTdd.Tests.csproj`:
 
-- ファイル名を `MyGame.Tests.csproj` にリネーム
+- ファイル名を `MyGame.Tests.csproj` にリネーム (`git mv` 推奨、Step B と同じ理由)
 - `<RootNamespace>UnityHexagonalTdd</RootNamespace>` → `<RootNamespace>MyGame</RootNamespace>`
 - `<Compile Include="../Assets/Scripts/Domain/**/*.cs">` などの **相対パスはそのままで OK** (Domain / Application / EditMode のディレクトリ構造を変えない限り)
 
@@ -209,6 +209,18 @@ dotnet watch test
 
 **Unity Editor を開く必要はない**。これがこの雛形の速度的アドバンテージ。
 
+#### EditMode 用の port test double
+
+Application のユースケースを spec する時、`IClock` 等の port にどう test double を用意するかは最初に迷うポイント。雛形に同梱の `FakeClock` は `Assets/Tests/PlayMode/Fakes/` にあり PlayMode test asmdef のみで参照可能なので、**EditMode の spec からは見えない**。
+
+軽い解決策は spec ファイルの中に inline で stub を書くこと:
+
+```csharp
+private sealed class StubClock : IClock { public float Now { get; set; } }
+```
+
+これで EditMode 単独で deterministic な検証が成立する。参照実装: [DayCycleControllerSpec.cs](https://github.com/miya8060/unity-template-trial-daycycle/blob/main/Assets/Tests/EditMode/DayCycleControllerSpec.cs)。
+
 ### Presentation / Bootstrap を書く場合
 
 MonoBehaviour や GameObject の挙動は `dotnet test` で検証できないので、PlayMode テストを使う。
@@ -224,6 +236,17 @@ PlayMode テスト書く際の常套手段:
 - Application の port (interface) を Presentation 側で adapter 実装する形に保つ
 - PlayMode テストでは port に **fake を注入** して deterministic にする (例: `FakeClock` で `Time.time` を制御)
 - Scene 構築は `[UnitySetUp]` 内で動的に組む (シーンファイルを git に入れない)
+
+#### MonoBehaviour に test 用注入 seam を生やすパターン
+
+`Awake` の中で default adapter (例: `new UnityClock()`) を作る MonoBehaviour を test から差し替えたい場合、public な注入メソッドを生やすのが軽い。代表的な 2 つ:
+
+- **`Configure(IClock, ...)` 系**: `Awake` 後に port を上書きする。test では `GameObject.AddComponent` の直後に `Configure` を呼ぶ。
+  参照: [DayCycleHost.cs](https://github.com/miya8060/unity-template-trial-daycycle/blob/main/Assets/Scripts/Presentation/DayCycleHost.cs) の `Configure(IClock, float, DayPhase)`
+- **`Bind(...)` 系**: `[SerializeField] private OtherMonoBehaviour other;` のような直接参照を test から差し替える。production では Bootstrap が inspector 経由で繋ぐが、test では dynamic に組んだ GameObject を `Bind` で渡す。
+  参照: [SkyTint.cs](https://github.com/miya8060/unity-template-trial-daycycle/blob/main/Assets/Scripts/Presentation/SkyTint.cs) の `Bind(DayCycleHost, Camera)`
+
+どちらも production の `[SerializeField]` 注入経路を残したまま、test だけ別経路を作るための小さな seam。constructor injection が使えない MonoBehaviour で test ability を確保する常套手段。
 
 ### Editor を開きっぱなしで MCP from CLI
 
@@ -268,6 +291,13 @@ asmdef の `defineConstraints` に `UNITY_INCLUDE_TESTS` が入っているこ�
 ### tests-net/bin と tests-net/obj が git に入りそうになる
 
 `.gitignore` に `tests-net/bin/` と `tests-net/obj/` が入っていれば OK。Unity の `.gitignore` の `[Bb]uild/` パターンと衝突しないか念のため確認。
+
+### subfolder を切ると Unity 起動前に folder.meta が生成されない
+
+`Assets/Scripts/Domain/DayCycle/` のように subfolder を作る場合、`DayCycle.meta` (folder の .meta) は Unity Editor を一度開かないと生成されない。先に `git add` してしまうと .meta なしの folder が commit され、後で Unity を開いた時に warning + 追加 commit が必要になる。
+
+- 推奨: subfolder を git に追加する前に Unity Editor を一度開いて folder .meta を生成する
+- もしくは: 最初は flat 構造 (`Assets/Scripts/Domain/*.cs`) で進め、ファイル数が増えてから subfolder 化
 
 ### MCP for Unity が反応しない
 
